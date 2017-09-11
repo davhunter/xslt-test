@@ -1,0 +1,20 @@
+<people>
+  <person>
+    <first>First</first>
+    <middle></middle>
+    <last>Last</last>
+    <sin>999 999 999</sin>
+  </person>
+  <person>
+    <first>First</first>
+    <middle></middle>
+    <last>Last</last>
+    <sin>999 999 999</sin>
+  </person>
+  <person>
+    <first>First</first>
+    <middle></middle>
+    <last>Last</last>
+    <sin>999 999 999</sin>
+  </person>
+</people>

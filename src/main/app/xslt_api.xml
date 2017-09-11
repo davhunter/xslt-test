@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:context="http://www.springframework.org/schema/context" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:mulexml="http://www.mulesoft.org/schema/mule/xml" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/xml http://www.mulesoft.org/schema/mule/xml/current/mule-xml.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd">
+    <http:listener-config name="xslt_api-httpListenerConfig" host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration"/>
+    <apikit:config name="xslt_api-config" raml="xslt_api.raml" consoleEnabled="false" doc:name="Router"/>
+    <http:request-config name="HTTP_Request_Configuration" host="localhost" port="8081" basePath="/xa" doc:name="HTTP Request Configuration">
+        <http:raml-api-configuration location="xslt_api.raml"/>
+    </http:request-config>
+    <context:property-placeholder location="tx-${mule.env}.properties"/>
+    <flow name="xslt_api-main">
+        <http:listener config-ref="xslt_api-httpListenerConfig" path="/xa/*" doc:name="HTTP"/>
+        <apikit:router config-ref="xslt_api-config" doc:name="APIkit Router"/>
+        <exception-strategy ref="xslt_api-apiKitGlobalExceptionMapping" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <flow name="xslt_api-console">
+        <http:listener config-ref="xslt_api-httpListenerConfig" path="/console/*" doc:name="HTTP"/>
+        <apikit:console config-ref="xslt_api-config" doc:name="APIkit Console"/>
+    </flow>
+    <flow name="get:/test:xslt_api-config">
+        <flow-ref name="set-inbound-vars" doc:name="Set Inbound Vars"/>
+        <dw:transform-message doc:name="Create Original XML">
+            <dw:input-payload mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+
+%var numOfIterations = flowVars.numIterations as :number
+---
+{
+	people: {
+		(1 to numOfIterations map 
+			person: {
+				first: "First",
+				middle: "",
+				last: "Last",
+				sin: "999 999 999"
+			}
+		)
+	} 
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <choice doc:name="Choose Transform Type">
+            <when expression="#[flowVars.testType == 'XSLT']">
+                <set-variable variableName="startTime" value="#[server.nanoTime()]" doc:name="Set Start Time"/>
+                <mulexml:xslt-transformer xsl-file="/home/hunter/projects/tsc/testing_xslt/src/main/resources/XSLT/transformation.xslt" maxIdleTransformers="2" maxActiveTransformers="5" doc:name="Transform via XSLT" acceptExternalEntities="true" ignoreBadInput="true"/>
+                <set-variable variableName="endTime" value="#[server.nanoTime()]" doc:name="Set End Time"/>
+            </when>
+            <otherwise>
+                <set-variable variableName="startTime" value="#[server.nanoTime()]" doc:name="Set Start Time"/>
+                <dw:transform-message doc:name="Transform via DTL" metadata:id="6582328a-7552-4e1a-8ea1-2a70fb00b2e1">
+                    <dw:input-payload mimeType="application/xml"/>
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+people: { (payload.people.*person map {
+	person @(first: $.first,
+		middle: $.middle,
+		last: $.last,
+		sin: $.sin
+	): ""
+})
+	
+}]]></dw:set-payload>
+                </dw:transform-message>
+                <set-variable variableName="endTime" value="#[server.nanoTime()]" doc:name="Set End Time"/>
+            </otherwise>
+        </choice>
+        <set-payload value="{      &quot;testType&quot;: &quot;#[flowVars.testType]&quot;,       &quot;completedInMillis&quot;: #[(flowVars.endTime - flowVars.startTime) / 1000000],       &quot;completedInNanos&quot;: #[flowVars.endTime - flowVars.startTime],             &quot;numIterations&quot;: #[flowVars.numIterations]   }" mimeType="application/json" doc:name="Set Payload"/>
+    </flow>
+    <flow name="get:/testDriver:xslt_api-config">
+        <flow-ref name="set-inbound-vars" doc:name="set-inbound-vars"/>
+        <dw:transform-message doc:name="Generate Requests Array">
+            <dw:input-payload mimeType="application/json"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+
+---
+(1 to p('testdriver.configuration.numIterations'))
+	map {
+		testType: flowVars.testType,
+		numIterations: flowVars.numIterations
+	} as :object {class: "com.deloitte.tx.cdm.TestRequest"}]]></dw:set-payload>
+        </dw:transform-message>
+        <request-reply doc:name="Request-Reply">
+            <vm:outbound-endpoint exchange-pattern="one-way" path="splitRequestRecords" doc:name="Send to Q for Message Splitting"/>
+            <vm:inbound-endpoint exchange-pattern="one-way" path="SPReturn" doc:name="Listen to Q for Aggregated Message Finish"/>
+        </request-reply>
+        <custom-transformer class="com.deloitte.tx.transformers.TestDriverResultTransformer" doc:name="Generate Result"/>
+    </flow>
+    <flow name="splitRequestRecordsFlow">
+        <vm:inbound-endpoint exchange-pattern="one-way" path="splitRequestRecords" doc:name="Listen to Q for Message Splitting"/>
+        <collection-splitter doc:name="Collection Splitter"/>
+        <vm:outbound-endpoint exchange-pattern="one-way" path="processRequest" doc:name="Send to Q for Message Processing"/>
+    </flow>
+    <flow name="processRequestFlow">
+        <vm:inbound-endpoint exchange-pattern="one-way" path="processRequest" doc:name="Listen to Q for Message Processing"/>
+        <enricher target="#[variable:apiResponse]" doc:name="Call API">
+            <processor-chain doc:name="Processor Chain">
+                <http:request config-ref="HTTP_Request_Configuration" path="/test" method="GET" doc:name="HTTP">
+                    <http:request-builder>
+                        <http:query-param paramName="numIterations" value="#[payload.numIterations]"/>
+                        <http:query-param paramName="testType" value="#[payload.testType]"/>
+                    </http:request-builder>
+                </http:request>
+                <json:json-to-object-transformer returnClass="com.deloitte.tx.cdm.TestResult" doc:name="JSON to Object"/>
+            </processor-chain>
+        </enricher>
+        <expression-component doc:name="Add API Result to Test Request"><![CDATA[payload.testResult = flowVars.apiResponse]]></expression-component>
+        <collection-aggregator failOnTimeout="true" doc:name="Collection Aggregator"/>
+        <vm:outbound-endpoint exchange-pattern="one-way" path="SPReturn" doc:name="Send to Q for Aggregated Finish Processing"/>
+    </flow>
+    <sub-flow name="set-inbound-vars">
+        <set-variable variableName="numIterations" value="#[Integer.parseInt(message.inboundProperties.'http.query.params'.numIterations)]" doc:name="Set Num Iterations"/>
+        <set-variable variableName="testType" value="#[message.inboundProperties.'http.query.params'.testType]" doc:name="Set Test Type"/>
+    </sub-flow>
+    <apikit:mapping-exception-strategy name="xslt_api-apiKitGlobalExceptionMapping">
+        <apikit:mapping statusCode="404">
+            <apikit:exception value="org.mule.module.apikit.exception.NotFoundException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Resource not found&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="405">
+            <apikit:exception value="org.mule.module.apikit.exception.MethodNotAllowedException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Method not allowed&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="415">
+            <apikit:exception value="org.mule.module.apikit.exception.UnsupportedMediaTypeException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Unsupported media type&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="406">
+            <apikit:exception value="org.mule.module.apikit.exception.NotAcceptableException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Not acceptable&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="400">
+            <apikit:exception value="org.mule.module.apikit.exception.BadRequestException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Bad request&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+    </apikit:mapping-exception-strategy>
+</mule>

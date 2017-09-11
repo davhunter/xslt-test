@@ -1,0 +1,72 @@
+#%RAML 1.0
+title: XSLT API
+version: 1.0
+baseUri: http://localhost:8081/xa
+
+types:
+  TestDriverResult:
+    type: object
+    properties:
+      testType:
+        type: string
+      averageResponseMillis:
+        type: number
+      averageResponseNanos:
+        type: number
+      minResponseNanos:
+        type: number
+      minResponseMillis:
+        type: number
+      numIterations:
+        type: integer
+      numCounted:
+        type: integer
+
+  TestResult:
+    type: object
+    properties:
+      testType:
+        type: string
+      completedInMillis:
+        type: integer
+      completedInNanos:
+        type: integer
+      numIterations:
+        type: integer
+
+/testDriver:
+  description: Main driver for testing to be done; utilizes `/test` under the covers
+  get:
+    queryParameters:
+      numIterations:
+        type: integer
+        required: false
+        default: 10
+      testType:
+        enum: ["XSLT", "DTL"]
+        required: false
+        default: "DTL"
+    responses:
+      200:
+        body:
+          application/json:
+            type: TestDriverResult
+                
+/test:
+  description: Run a specific test (XSLT or DTL)
+  get:
+    queryParameters:
+      numIterations:
+        type: integer
+        required: false
+        default: 10
+      testType:
+        enum: ["XSLT", "DTL"]
+        required: false
+        default: "DTL"
+    responses:
+      200:
+        body:
+          application/json:
+            type: TestResult
+  
